@@ -4,7 +4,8 @@
 #include <vector>
 #include <Core.h>
 #include <Geometry.h>
-#include <ros/ros.h>
+//#include <ros/ros.h>
+#include <lTime.h>
 #include <iostream>
 #include <fstream>
 
@@ -19,14 +20,14 @@ enum dataType{
 struct imuData{
     Vector3f accel;
     Vector3f gyro;
-    ros::Time stamp;
+    lTime stamp;
 };
 
 struct mocapData{
     Vector3f pos;
     Quaternionf quat;
-    ros::Time stamp;
-    ros::Time receivedTime;
+    lTime stamp;
+    lTime receivedTime;
 };
 
 class DataFiles{
@@ -46,18 +47,5 @@ public:
     int getNextTimeReceived(ifstream &mocapFile,ifstream &imuFile,mocapData &mocap,imuData &imu,int &type);
 
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #endif

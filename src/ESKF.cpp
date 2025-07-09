@@ -193,6 +193,8 @@ void ESKF::predictIMU(const Vector3f& a_m, const Vector3f& omega_m, const float 
     // Predict P and inject variance (with diagonal optimization)
     // P_ = F_x_*P_*F_x_.transpose();
 
+
+
     Matrix<float, dSTATE_SIZE, dSTATE_SIZE> Pnew;
     unrolledFPFt(P_, Pnew, dt,
         -Rot * getSkew(acc_body) * dt,
@@ -201,6 +203,7 @@ void ESKF::predictIMU(const Vector3f& a_m, const Vector3f& omega_m, const float 
     P_ = Pnew;
 
     // Inject process noise
+    // eqn 268, page 59 add right part
     P_.diagonal().block<3, 1>(dVEL_IDX, 0).array() += var_acc_ * SQ(dt);
     P_.diagonal().block<3, 1>(dTHETA_IDX, 0).array() += var_omega_ * SQ(dt);
     P_.diagonal().block<3, 1>(dAB_IDX, 0).array() += var_acc_bias_ * dt;
@@ -440,9 +443,11 @@ void ESKF::injectErrorState(const Matrix<float, dSTATE_SIZE, 1>& error_state) {\
     nominalState_.block<3, 1>(AB_IDX, 0) += error_state.block<3, 1>(dAB_IDX, 0);
     nominalState_.block<3, 1>(GB_IDX, 0) += error_state.block<3, 1>(dGB_IDX, 0);
 
+    // Reset
     // Reflect this tranformation in the P matrix, aka ESKF Reset
     // Note that the document suggests that this step is optional
     // eqn 287, pg 63
+    // eqn 285, pg 63
     Matrix3f G_theta = I_3 - getSkew(0.5f * dtheta);
     P_.block<3, 3>(dTHETA_IDX, dTHETA_IDX) =
             G_theta * P_.block<3, 3>(dTHETA_IDX, dTHETA_IDX) * G_theta.transpose();

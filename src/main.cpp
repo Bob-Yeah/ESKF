@@ -2,8 +2,8 @@
 #include <iostream>
 #include <chrono>
 #include <parseDataFiles.h>
-#include <geometry_msgs/PoseWithCovariance.h>
-#include <tf/transform_broadcaster.h>
+// #include <geometry_msgs/PoseWithCovariance.h>
+// #include <tf/transform_broadcaster.h>
 #include <math.h>
 #include <lTime.h>
 #define SQ(x) (x*x)
@@ -13,7 +13,8 @@
 using namespace Eigen;
 using namespace std;
 
-void postTF(ESKF eskf,tf::TransformBroadcaster tb,std::string name);
+// void postTF(ESKF eskf,tf::TransformBroadcaster tb,std::string name);
+void postTF(ESKF eskf, std::string name);
 double difference(ESKF eskfRef,ESKF eskfTest);
 
 int main(int argc, char** argv) {
@@ -108,13 +109,14 @@ int main(int argc, char** argv) {
     // The others use the data as they arrived during data collection (randomised delay of the mocap ~ 18ms delay)
     // All comparisons are made on the arrival of IMU data, as this is the same for all of them including the spoof case.
 
-    ros::init(argc, argv, "TestESKF");
+    // NoRos
+    // ros::init(argc, argv, "TestESKF");
 
-    ros::NodeHandle node;
+    // ros::NodeHandle node;
 
-    ros::Publisher posePub = node.advertise<geometry_msgs::PoseWithCovariance>("predictiedLocation",1);
+    // ros::Publisher posePub = node.advertise<geometry_msgs::PoseWithCovariance>("predictiedLocation",1);
 
-    tf::TransformBroadcaster tb;
+    // tf::TransformBroadcaster tb;
 
     DataFiles filesObj("../timeSeries/hardWave");
 
@@ -131,101 +133,109 @@ int main(int argc, char** argv) {
     double asArriveErrorAccSqu = 0;
     double upToNewErrorAccSqu = 0;
 
-    while(!flag){
-        imuData imu;
-        mocapData mocap;
-        int type;
+     while(!flag){
+         imuData imu;
+         mocapData mocap;
+         int type;
 
-        if(spoofIMUcount < testIMUCount){
-        //do spoof.
-        flag = filesObj.getNextTimeCorrected(filesObj.readerMocap,filesObj.readerIMU,mocap,imu,type); // emulates lag free data
-        if(type == isImuData){
-            static ros::Time oldTime;
-            ros::Duration diff = imu.stamp - oldTime;
-            oldTime = imu.stamp;
-            lTime stamp(imu.stamp.sec,imu.stamp.nsec);
-            if(diff.toSec() > 1999) diff.fromSec(0.001);
-            spoofIMUcount ++;
-            eskfSpoof.predictIMU(imu.accel, imu.gyro, diff.toSec(),stamp);
-        }
+         if(spoofIMUcount < testIMUCount){
+             //do spoof.
+             flag = filesObj.getNextTimeCorrected(filesObj.readerMocap,filesObj.readerIMU,mocap,imu,type); // emulates lag free data
+             
+             if(type == isImuData){
+                 cout << "spoof imu data:" << imu.accel << "," << imu.gyro << " t:" << imu.stamp.sec << "," << imu.stamp.nsec << endl;
+                 //static ros::Time oldTime;
+                 static lTime oldTime;
+                 lTime diff = imu.stamp - oldTime;
+                 oldTime = imu.stamp;
+                 lTime stamp(imu.stamp.sec,imu.stamp.nsec);
+                 if(diff.toSec() > 1999) diff.fromSec(0.001);
+                 spoofIMUcount ++;
+                 eskfSpoof.predictIMU(imu.accel, imu.gyro, diff.toSec(),stamp);
+                 cout << "IMU read." << endl;
+             }
 
-        if(type == isMocapData){
-            lTime stamp(mocap.stamp.sec,mocap.stamp.nsec);
-            lTime now(mocap.receivedTime.sec,mocap.receivedTime.nsec);
-            eskfSpoof.measurePos(mocap.pos, SQ(sigma_mocap_pos)*I_3,stamp,now);
-            eskfSpoof.measureQuat(mocap.quat, SQ(sigma_mocap_rot)*I_3,stamp,now);
+             if(type == isMocapData){
+                 lTime stamp(mocap.stamp.sec,mocap.stamp.nsec);
+                 lTime now(mocap.receivedTime.sec,mocap.receivedTime.nsec);
+                 eskfSpoof.measurePos(mocap.pos, SQ(sigma_mocap_pos)*I_3,stamp,now);
+                 eskfSpoof.measureQuat(mocap.quat, SQ(sigma_mocap_rot)*I_3,stamp,now);
+                 cout << "MOCAP read." << endl;
 
+                 //tf::StampedTransform meas;
+                 //meas.setOrigin(tf::Vector3(mocap.pos[0],mocap.pos[1],mocap.pos[2]));
+                 //meas.setRotation(tf::Quaternion(mocap.quat.x(),mocap.quat.y(),mocap.quat.z(),mocap.quat.w()));
+                 //meas.stamp_ = ros::Time::now();
+                 //meas.frame_id_ = "mocha_world";
+                 //meas.child_frame_id_ = "meas";
+                 //tb.sendTransform(meas);
+             }
+         }
+         else{
+             //do candidates.
+             flag = filesObj.getNextNotCorrected(filesObj.readerMixed,mocap,imu,type);
+             if(type == isImuData){
+                 cout << "candidates imu data:" << imu.accel << "," << imu.gyro << " t:" << imu.stamp.sec << "," << imu.stamp.nsec << endl;
+                 testIMUCount ++;
+                 static lTime oldTime;
+                 lTime diff = imu.stamp - oldTime;
+                 oldTime = imu.stamp;
+                 lTime stamp(imu.stamp.sec,imu.stamp.nsec);
+                 if(diff.toSec() > 1999) diff.fromSec(0.001);
+                 eskfAsArrive.predictIMU(imu.accel, imu.gyro, diff.toSec(),stamp);
+                 eskfUpdateToNew.predictIMU(imu.accel, imu.gyro, diff.toSec(),stamp);
+                 cout << "ELSE IMU read." << endl;
+             }
 
-            tf::StampedTransform meas;
-            meas.setOrigin(tf::Vector3(mocap.pos[0],mocap.pos[1],mocap.pos[2]));
-            meas.setRotation(tf::Quaternion(mocap.quat.x(),mocap.quat.y(),mocap.quat.z(),mocap.quat.w()));
-            meas.stamp_ = ros::Time::now();
-            meas.frame_id_ = "mocha_world";
-            meas.child_frame_id_ = "meas";
-            tb.sendTransform(meas);
-        }
-        }
-        else{
-        //do candidates.
-        flag = filesObj.getNextNotCorrected(filesObj.readerMixed,mocap,imu,type);
-        if(type == isImuData){
-            testIMUCount ++;
-            static ros::Time oldTime;
-            ros::Duration diff = imu.stamp - oldTime;
-            oldTime = imu.stamp;
-            lTime stamp(imu.stamp.sec,imu.stamp.nsec);
-            if(diff.toSec() > 1999) diff.fromSec(0.001);
-            eskfAsArrive.predictIMU(imu.accel, imu.gyro, diff.toSec(),stamp);
-            eskfUpdateToNew.predictIMU(imu.accel, imu.gyro, diff.toSec(),stamp);
-        }
+             if(type == isMocapData){
 
-        if(type == isMocapData){
+                 lTime stamp(mocap.stamp.sec,mocap.stamp.nsec);
 
-            lTime stamp(mocap.stamp.sec,mocap.stamp.nsec);
+                 lTime now(mocap.receivedTime.sec,mocap.receivedTime.nsec);
 
-            lTime now(mocap.receivedTime.sec,mocap.receivedTime.nsec);
+                 mocapCount++ ;
 
-            mocapCount++ ;
-
-            eskfAsArrive.measurePos(mocap.pos, SQ(sigma_mocap_pos)*I_3,stamp,now);
-            eskfAsArrive.measureQuat(mocap.quat, SQ(sigma_mocap_rot)*I_3,stamp,now);
-
-
-            eskfUpdateToNew.measurePos(mocap.pos, SQ(sigma_mocap_pos)*I_3,stamp,now);
-            eskfUpdateToNew.measureQuat(mocap.quat, SQ(sigma_mocap_rot)*I_3,stamp,now);
-        }
-        }
-
-        if(testIMUCount == spoofIMUcount){
-            postTF(eskfSpoof,tb,"spoof");
-            postTF(eskfAsArrive,tb,"asArrive");
-            postTF(eskfUpdateToNew,tb,"UpToNew");
-            double asArriveEr = difference(eskfSpoof,eskfAsArrive);
-            double upToNewEr = difference(eskfSpoof,eskfUpdateToNew);
-
-            if(mocapCount > 100){   // stop max error just being the initialisation error
-                asArriveErrorAcc += asArriveEr;
-                upToNewErrorAcc += upToNewEr;
-                asArriveErrorAccSqu += pow(asArriveEr,2);
-                upToNewErrorAccSqu += pow(upToNewEr,2);
-                if( asArriveEr > asArriveLargestError) asArriveLargestError = asArriveEr;
-                if( upToNewEr > upToNewLargestError) upToNewLargestError = upToNewEr;
-            }
-        }
-    }
-    asArriveError = asArriveErrorAcc / (testIMUCount-100);
-    upToNewError = upToNewErrorAcc / (testIMUCount-100);
-    Vector3f accelBias = eskfUpdateToNew.getAccelBias();
-    Vector3f gyroBias = eskfUpdateToNew.getGyroBias();
-    cout << "accelBias" << accelBias << endl << "  gyroBias "<< gyroBias << endl;
-    cout << "asArrive pos error average = " << asArriveError << endl;
-    cout << "asArrive largest error = " << asArriveLargestError << endl;
-    cout << "asArrive varience error = " <<  asArriveErrorAccSqu/((testIMUCount-100)) - pow(asArriveError,2)<< endl;
-    cout << "upToNew pos error average = " << upToNewError << endl;
-    cout << "upToNew largest error = " << upToNewLargestError << endl;
-    cout << "upToNew varience error = " << upToNewErrorAccSqu/((testIMUCount-100)) - pow(upToNewError,2)  << endl;
+                 eskfAsArrive.measurePos(mocap.pos, SQ(sigma_mocap_pos)*I_3,stamp,now);
+                 eskfAsArrive.measureQuat(mocap.quat, SQ(sigma_mocap_rot)*I_3,stamp,now);
 
 
+                 eskfUpdateToNew.measurePos(mocap.pos, SQ(sigma_mocap_pos)*I_3,stamp,now);
+                 eskfUpdateToNew.measureQuat(mocap.quat, SQ(sigma_mocap_rot)*I_3,stamp,now);
+                 cout << "ELSE MOCAP read." << endl;
+             }
+         }
+         cout << "testIMUCount: " << testIMUCount << ",spoofIMUcount: " << spoofIMUcount << endl;
+         if(testIMUCount == spoofIMUcount){
+             /*postTF(eskfSpoof,tb,"spoof");
+             postTF(eskfAsArrive,tb,"asArrive");
+             postTF(eskfUpdateToNew,tb,"UpToNew");*/
+             postTF(eskfSpoof,"spoof");
+             postTF(eskfAsArrive,"asArrive");
+             postTF(eskfUpdateToNew,"UpToNew");
+             double asArriveEr = difference(eskfSpoof,eskfAsArrive);
+             double upToNewEr = difference(eskfSpoof,eskfUpdateToNew);
+
+             if(mocapCount > 100){   // stop max error just being the initialisation error
+                 asArriveErrorAcc += asArriveEr;
+                 upToNewErrorAcc += upToNewEr;
+                 asArriveErrorAccSqu += pow(asArriveEr,2);
+                 upToNewErrorAccSqu += pow(upToNewEr,2);
+                 if( asArriveEr > asArriveLargestError) asArriveLargestError = asArriveEr;
+                 if( upToNewEr > upToNewLargestError) upToNewLargestError = upToNewEr;
+             }
+         }
+     }
+     asArriveError = asArriveErrorAcc / (testIMUCount-100);
+     upToNewError = upToNewErrorAcc / (testIMUCount-100);
+     Vector3f accelBias = eskfUpdateToNew.getAccelBias();
+     Vector3f gyroBias = eskfUpdateToNew.getGyroBias();
+     cout << "accelBias" << accelBias << endl << "  gyroBias "<< gyroBias << endl;
+     cout << "asArrive pos error average = " << asArriveError << endl;
+     cout << "asArrive largest error = " << asArriveLargestError << endl;
+     cout << "asArrive varience error = " <<  asArriveErrorAccSqu/((testIMUCount-100)) - pow(asArriveError,2)<< endl;
+     cout << "upToNew pos error average = " << upToNewError << endl;
+     cout << "upToNew largest error = " << upToNewLargestError << endl;
+     cout << "upToNew varience error = " << upToNewErrorAccSqu/((testIMUCount-100)) - pow(upToNewError,2)  << endl;
 }
 
 double difference(ESKF eskfRef,ESKF eskfTest){
@@ -235,14 +245,20 @@ double difference(ESKF eskfRef,ESKF eskfTest){
     return out.norm();
 }
 
-void postTF(ESKF eskf,tf::TransformBroadcaster tb,std::string name){
-    tf::StampedTransform pred;
+// void postTF(ESKF eskf,tf::TransformBroadcaster tb,std::string name){
+//     tf::StampedTransform pred;
+//     Vector3f pos = eskf.getPos();
+//     Quaternionf quat = eskf.getQuat();
+//     pred.setOrigin(tf::Vector3(pos[0],pos[1],pos[2]));
+//     pred.setRotation(tf::Quaternion(quat.x(),quat.y(),quat.z(),quat.w()));
+//     pred.stamp_ = ros::Time::now();
+//     pred.frame_id_ = "mocha_world";
+//     pred.child_frame_id_ = name;
+//     tb.sendTransform(pred);
+// }
+
+void postTF(ESKF eskf, std::string name){
     Vector3f pos = eskf.getPos();
     Quaternionf quat = eskf.getQuat();
-    pred.setOrigin(tf::Vector3(pos[0],pos[1],pos[2]));
-    pred.setRotation(tf::Quaternion(quat.x(),quat.y(),quat.z(),quat.w()));
-    pred.stamp_ = ros::Time::now();
-    pred.frame_id_ = "mocha_world";
-    pred.child_frame_id_ = name;
-    tb.sendTransform(pred);
+    cout << name << " Position:" << pos.x() << "," << pos.y() << "," << pos.z() << std::endl;
 }

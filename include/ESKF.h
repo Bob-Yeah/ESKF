@@ -7,6 +7,7 @@
 #include <Geometry.h>
 #include <iostream>
 #include <lTime.h>
+#include <vector>
 
 #define SUPPORT_STDIOSTREAM
 

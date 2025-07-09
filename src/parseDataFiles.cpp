@@ -90,13 +90,15 @@ int DataFiles::getNextTimeCorrected(ifstream &mocapFile,ifstream &imuFile,mocapD
     static int primed = 0;
     int typeTemp;
     int error = 0;
-    ros::Duration hack(0);
+    //ros::Duration hack(0);
+    lTime hack;
     if(!primed){
+        cout << "getNextTimeCorrected !primed" << endl;
         primed = 1;
         error = getNext(mocapFile,mocapTemp,imuTemp, typeTemp);
         error += getNext(imuFile,mocapTemp,imuTemp, typeTemp);
 
-        ros::Duration dur = imuTemp.stamp - mocapTemp.stamp + hack;
+        lTime dur = imuTemp.stamp - mocapTemp.stamp + hack;
         if(dur.toSec() >= 0){
             typeTemp = isMocapData;
         }
@@ -109,8 +111,9 @@ int DataFiles::getNextTimeCorrected(ifstream &mocapFile,ifstream &imuFile,mocapD
         return error;
     }
     else{
+        cout << "getNextTimeCorrected primed" << endl;
         //the oldest one would have been sent, update the other one.
-        ros::Duration dur = imuTemp.stamp - mocapTemp.stamp + hack;
+        lTime dur = imuTemp.stamp - mocapTemp.stamp + hack;
         if(dur.toSec() >= 0){
              error = getNext(mocapFile,mocapTemp,imuTemp, typeTemp);
         }
@@ -129,7 +132,7 @@ int DataFiles::getNextTimeCorrected(ifstream &mocapFile,ifstream &imuFile,mocapD
         type = typeTemp;
         return error;
     }
-
+    //return error;
 }
 
 int DataFiles::getNextTimeReceived(ifstream &mocapFile,ifstream &imuFile,mocapData &mocap,imuData &imu,int &type){
@@ -139,13 +142,14 @@ int DataFiles::getNextTimeReceived(ifstream &mocapFile,ifstream &imuFile,mocapDa
     static int primed = 0;
     int typeTemp;
     int error = 0;
-    ros::Duration hack(0);
+    //ros::Duration hack(0);
+    lTime hack;
     if(!primed){
         primed = 1;
         error = getNext(mocapFile,mocapTemp,imuTemp, typeTemp);
         error += getNext(imuFile,mocapTemp,imuTemp, typeTemp);
 
-        ros::Duration dur = imuTemp.stamp - mocapTemp.receivedTime + hack;
+        lTime dur = imuTemp.stamp - mocapTemp.receivedTime + hack;
         if(dur.toSec() >= 0){
             typeTemp = isMocapData;
         }
@@ -159,7 +163,7 @@ int DataFiles::getNextTimeReceived(ifstream &mocapFile,ifstream &imuFile,mocapDa
     }
     else{
         //the oldest one would have been sent, update the other one.
-        ros::Duration dur = imuTemp.stamp - mocapTemp.receivedTime + hack;
+        lTime dur = imuTemp.stamp - mocapTemp.receivedTime + hack;
         if(dur.toSec() >= 0){
              error = getNext(mocapFile,mocapTemp,imuTemp, typeTemp);
         }
@@ -178,6 +182,7 @@ int DataFiles::getNextTimeReceived(ifstream &mocapFile,ifstream &imuFile,mocapDa
         type = typeTemp;
         return error;
     }
+    //return error;
 }
 
 int DataFiles::getNextNotCorrected(ifstream &mixedFile,mocapData &mocap,imuData &imu,int &type){
